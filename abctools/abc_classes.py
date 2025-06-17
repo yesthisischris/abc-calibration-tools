@@ -419,7 +419,8 @@ def apply_per_group_preserve_key(
     """
     Apply a user-defined function to each group of a DataFrame, preserving the key column.
     NOTE: This is surprisingly a bit tricky in polars, and a better solution is welcome.
-    Handles both DataFrame and scalar outputs from the user-defined function.
+    Handles both DataFrame and scalar outputs from the user-defined function
+    and allows the UDF to return multiple columns.
 
     Args:
         df (pl.DataFrame): The input DataFrame.
@@ -439,12 +440,6 @@ def apply_per_group_preserve_key(
         if not isinstance(result, pl.DataFrame):
             # Wrap scalar output in a DataFrame
             result = pl.DataFrame({result_column: [result]})
-
-        # Check that the result is a scalar because arrays dictionaries lists shouldn't be allowed
-        if result.shape[1] > 1:
-            raise ValueError(
-                "The user-defined function must return a scalar or a DataFrame with one column."
-            )
 
         # Add the key column to the result
         result = result.with_columns(pl.lit(part[key][0]).alias(key))
