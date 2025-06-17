@@ -79,7 +79,7 @@ class SimulationBundle:
         return self.inputs["simulation"].n_unique()
 
     @property
-    def baseline_params(self) -> list:
+    def baseline_params(self) -> dict:
         """Getter for _baseline_params."""
         return self._baseline_params
 
@@ -273,9 +273,11 @@ class SimulationBundle:
             raise ValueError("Distances have not been calculated.")
 
         # Filter and join to get accepted parameters
-        self.accepted = self.distances.filter(
-            pl.col("distance") <= tolerance
-        ).join(self.inputs, on="simulation")
+        self.accepted = (
+            self.distances.filter(pl.col("distance") <= tolerance)
+            .join(self.inputs, on="simulation")
+            .drop("distance")
+        )
 
         # Drop 'randomSeed' columns if present
         if self.seed_variable_name in self.accepted.columns:
@@ -302,26 +304,26 @@ class SimulationBundle:
         if self.distances.is_empty():
             raise ValueError("Distances have not been calculated.")
 
-        self.accept_reject("tolerance")
-        self.accepted = (
+        self.accept_reject(tolerance)
+
+        accepted_df = (
             self.accepted.group_by(
-                self.inputs.drop(
-                    ["simulation", self.seed_variable_name]
-                ).columns
+                self.inputs.drop([
+                    "simulation",
+                    self.seed_variable_name,
+                ]).columns
             )
             .agg(
                 [
-                    pl.len().alias("accepted_per_particle"),
-                    pl.col("distance").mean().alias("average_distance"),
+                    pl.len().alias("acceptance_weight"),
                     pl.col("simulation").min().alias("simulation"),
                 ]
             )
-            .with_columns(
-                (pl.col("accepted_per_particle") / self.replicates_per_sample)
-                .alias("acceptance_weight")
-                .sort("simulation")
-            )
+            .filter(pl.col("acceptance_weight") > 0)
+            .sort("simulation")
         )
+
+        self.accepted = accepted_df
 
     def accept_proportion(self, proportion: float):
         """
